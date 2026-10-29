@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Postman Collection Generator</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1c2330;--mut:#5d6778;--bd:#d8dde6;--ac:#e8590c}
+@media(prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d2128;--fg:#e8ebf0;--mut:#9aa4b5;--bd:#333a46;--ac:#ff8a4c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}p.s{color:var(--mut);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:16px}
+h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 12px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:640px){.g{grid-template-columns:1fr}}
+label{display:block;font-size:13px;color:var(--mut)}input,select,textarea{width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit}
+textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;min-height:200px}
+button{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:10px 18px;font:inherit;font-weight:600;cursor:pointer}
+button.o{background:transparent;color:var(--fg);border:1px solid var(--bd)}.row{display:flex;gap:10px;flex-wrap:wrap}
+small{color:var(--mut)}pre{max-height:240px;overflow:auto;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:10px;font-size:12px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Postman Collection Generator</h1>
+<p class="s">กรอกข้อมูล → กด Export → ได้ไฟล์ .postman_collection.json ไปกด Import ใน Postman ได้เลย (ทำงานในเครื่องคุณ ไม่ส่งข้อมูลออกไปไหน)</p>
+
+<div class="card"><h2>1. ทั่วไป</h2>
+<div class="g">
+<label>ชื่อ Collection<input id="name" value="My API Collection"></label>
+<label>รูปแบบ Auth<select id="mode"><option value="oauth">OAuth 2.0 (client_credentials) + Bearer</option><option value="apikey">x-api-key header</option></select></label>
+<label>base_url (domain ที่ยิง API จริง)<input id="base" value="https://esb.example.com"></label>
+<label id="apikeyBox" class="hide">api_key<input id="apikey" placeholder="your-x-api-key"></label>
+</div></div>
+
+<div class="card" id="oauthBox"><h2>2. OAuth 2.0 token</h2>
+<div class="g">
+<label>token_base_url (domain ขอ token — คนละ domain กับ base_url ได้)<input id="tbase" value="https://esb.example.com"></label>
+<label>Token path<input id="tpath" value="/auth/v3.2/oauth/token"></label>
+<label>client_id<input id="cid"></label>
+<label>client_secret<input id="csec"></label>
+</div>
+<small>จะได้ request "00-Auth / Get Token" + pre-request script ที่ขอ/รีเฟรช token ให้อัตโนมัติ (Run Collection ได้เลย)</small></div>
+
+<div class="card"><h2>3. Pin IP (ไม่บังคับ)</h2>
+<div class="g">
+<label>IP ของ base_url (ใส่ได้หลายตัว คั่นด้วย comma/เว้นวรรค)<input id="ips" placeholder="110.49.132.212, 110.49.128.250"></label>
+<label>IP ของ token_base_url (ใช้ตัวแรก)<input id="tips" placeholder="เว้นว่าง = ใช้ domain ปกติ"></label>
+</div>
+<small>ถ้าใส่ IP จะสร้างโฟลเดอร์แยกต่อ IP: ยิงไปที่ <code>https://IP/...</code> แล้วใส่ header <code>Host: domain</code> ให้ (ไม่ใช่ pin DNS จริง ดูข้อจำกัดในคำอธิบาย) ต้องปิด SSL verification ใน Postman สำหรับ collection นี้</small></div>
+
+<div class="card"><h2>4. Endpoints</h2>
+<label>1 บรรทัดต่อ 1 API — รูปแบบ: <code>[METHOD] /path?query</code> หรือ <code>ชื่อ | METHOD /path</code> (ไม่ใส่ METHOD = GET, <code>{id}</code> จะกลายเป็น path variable)
+<textarea id="eps" spellcheck="false">/tmf-api/catalog-management/v4/productOffering/{id}
+/tmf-api/catalog-management/v4/productOffering/search?limit=25&offset=0
+Price by id | GET /tmf-api/catalog-management/v4/productOfferingPrice/{id}
+/tmf-api/catalog-management/v4/productOfferingPrice/search</textarea></label>
+<small>method อื่นนอกจาก GET จะสร้างให้แต่ยังไม่มี body — ไปเติมใน Postman เอง</small></div>
+
+<div class="row"><button id="go">Export collection</button><button class="o" id="pv">Preview JSON</button><button class="o" id="cp">Copy JSON</button></div>
+<pre id="out" class="hide"></pre>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const toggle=()=>{const k=$('mode').value==='apikey';$('apikeyBox').classList.toggle('hide',!k);$('oauthBox').classList.toggle('hide',k)};
+$('mode').onchange=toggle;toggle();
+const trim=s=>s.trim().replace(/\/+$/,'');
+
+function parseLine(line){
+  let name='',rest=line.trim();
+  if(rest.includes('|')){const i=rest.indexOf('|');name=rest.slice(0,i).trim();rest=rest.slice(i+1).trim()}
+  let method='GET';const m=rest.match(/^(GET|POST|PUT|PATCH|DELETE)\s+(.*)$/i);
+  if(m){method=m[1].toUpperCase();rest=m[2].trim()}
+  const qi=rest.indexOf('?');const pathStr=qi>=0?rest.slice(0,qi):rest;const qs=qi>=0?rest.slice(qi+1):'';
+  const vars=[];
+  const path=pathStr.split('/').filter(Boolean).map(s=>{const v=s.match(/^\{(.+)\}$/);if(v){vars.push({key:v[1],value:''});return ':'+v[1]}return s});
+  const query=qs?qs.split('&').filter(Boolean).map(p=>{const j=p.indexOf('=');return j<0?{key:p,value:''}:{key:p.slice(0,j),value:p.slice(j+1)}}):[];
+  const raw='{{base_url}}/'+path.join('/')+(qs?'?'+qs:'');
+  const url={raw,host:['{{base_url}}'],path};if(query.length)url.query=query;if(vars.length)url.variable=vars;
+  return{name:name||path.slice(-2).join('/').replace(/:/g,'')||'request',method,url};
+}
+
+function build(){
+  const apikey=$('mode').value==='apikey';
+  const mkU=v=>{try{return new URL(trim(v))}catch(e){return null}};
+  const U=mkU($('base').value),tU=mkU($('tbase').value);
+  const ips=$('ips').value.split(/[\s,]+/).filter(Boolean),tip=($('tips').value.split(/[\s,]+/).filter(Boolean))[0];
+  const pin=(url,ip)=>{if(!ip||!U)return url;const u=JSON.parse(JSON.stringify(url));u.raw=u.raw.replace('{{base_url}}','https://'+ip+(U.port?':'+U.port:''));u.protocol='https';u.host=ip.split('.');if(U.port)u.port=U.port;return u};
+  const mkItems=ip=>$('eps').value.split('\n').filter(l=>l.trim()).map(l=>{
+    const p=parseLine(l);
+    const req={method:p.method,header:[],url:pin(p.url,ip)};
+    if(ip&&U)req.header.push({key:'Host',value:U.host});
+    if(apikey)req.header.push({key:'x-api-key',value:'{{api_key}}'});
+    else req.auth={type:'bearer',bearer:[{key:'token',value:'{{access_token}}',type:'string'}]};
+    return{name:p.name,event:[{listen:'test',script:{type:'text/javascript',exec:[
+      "pm.test('Status is 2xx', function () { pm.expect(pm.response.code).to.be.within(200, 299); });",
+      "pm.test('Not 401/403 (auth ok)', function () { pm.expect(pm.response.code).to.not.be.oneOf([401, 403]); });"]}}],request:req,response:[]};
+  });
+  const items=ips.length?ips.map(ip=>({name:'IP '+ip,item:mkItems(ip)})):mkItems(null);
+  const col={info:{name:$('name').value||'Collection',schema:'https://schema.getpostman.com/json/collection/v2.1.0/collection.json'},item:[]};
+  const vars=[{key:'base_url',value:trim($('base').value)}];
+  if(apikey){vars.push({key:'api_key',value:$('apikey').value});col.item=items}
+  else{
+    const tp=$('tpath').value.trim().replace(/^\/?/,'/');
+    const tpin=!!(tip&&tU),tpath=tp.split('/').filter(Boolean);
+    const turl=tpin?{raw:'https://'+tip+(tU.port?':'+tU.port:'')+tp,protocol:'https',host:tip.split('.'),path:tpath}:{raw:'{{token_base_url}}'+tp,host:['{{token_base_url}}'],path:tpath};
+    if(tpin&&tU.port)turl.port=tU.port;
+    vars.push({key:'token_base_url',value:trim($('tbase').value)},{key:'client_id',value:$('cid').value},{key:'client_secret',value:$('csec').value},{key:'access_token',value:''},{key:'token_expires_at',value:''});
+    col.item=[{name:'00-Auth',item:[{name:'Get Token',event:[{listen:'test',script:{type:'text/javascript',exec:[
+      "const res = pm.response.json();",
+      "pm.test('Got access_token', function () { pm.expect(res.access_token).to.exist; });",
+      "pm.collectionVariables.set('access_token', res.access_token);",
+      "pm.collectionVariables.set('token_expires_at', Date.now() + (res.expires_in || 3600) * 1000 - 30000);"]}}],
+      request:{method:'POST',header:[{key:'Content-Type',value:'application/x-www-form-urlencoded'}].concat(tpin?[{key:'Host',value:tU.host}]:[]),
+        body:{mode:'urlencoded',urlencoded:[{key:'client_id',value:'{{client_id}}'},{key:'client_secret',value:'{{client_secret}}'},{key:'grant_type',value:'client_credentials'}]},
+        url:turl},response:[]}]},
+      {name:'APIs',item:items}];
+    col.event=[{listen:'prerequest',script:{type:'text/javascript',exec:[
+      "if (pm.info.requestName !== 'Get Token') {",
+      "    const exp = pm.collectionVariables.get('token_expires_at');",
+      "    if (!(exp && Date.now() < Number(exp))) {",
+      "        pm.sendRequest({",
+      "            url: " + (tpin ? "'https://" + tip + (tU.port ? ':' + tU.port : '') + tp + "'" : "pm.collectionVariables.get('token_base_url') + '" + tp + "'") + ",",
+      "            method: 'POST',",
+      "            header: { 'Content-Type': 'application/x-www-form-urlencoded'" + (tpin ? ", 'Host': '" + tU.host + "'" : "") + " },",
+      "            body: { mode: 'urlencoded', urlencoded: [",
+      "                { key: 'client_id', value: pm.collectionVariables.get('client_id') },",
+      "                { key: 'client_secret', value: pm.collectionVariables.get('client_secret') },",
+      "                { key: 'grant_type', value: 'client_credentials' } ] }",
+      "        }, (err, res) => {",
+      "            if (err) { throw new Error('Token refresh failed: ' + (err.message || JSON.stringify(err))); }",
+      "            if (res.code !== 200) { throw new Error('Token endpoint returned HTTP ' + res.code + ': ' + res.text()); }",
+      "            const j = res.json();",
+      "            pm.collectionVariables.set('access_token', j.access_token);",
+      "            pm.collectionVariables.set('token_expires_at', Date.now() + (j.expires_in || 3600) * 1000 - 30000);",
+      "        });",
+      "    }",
+      "}"]}}];
+  }
+  col.variable=vars;
+  return JSON.stringify(col,null,2);
+}
+$('go').onclick=()=>{const j=build();const n=($('name').value||'collection').replace(/[^\w.-]+/g,'_');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([j],{type:'application/json'}));a.download=n+'.postman_collection.json';a.click()};
+$('pv').onclick=()=>{$('out').textContent=build();$('out').classList.remove('hide')};
+$('cp').onclick=()=>navigator.clipboard.writeText(build());
+</script>
+</body>
+</html>
